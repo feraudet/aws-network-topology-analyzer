@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class SSOAuthenticator:
     """Handles AWS SSO authentication and credential management"""
     
-    def __init__(self, profile_name: str):
+    def __init__(self, profile_name: str, verify_ssl: bool = True):
         """
         Initialize SSO authenticator with profile name
         
@@ -24,6 +24,7 @@ class SSOAuthenticator:
             profile_name: AWS SSO profile name from ~/.aws/config
         """
         self.profile_name = profile_name
+        self.verify_ssl = verify_ssl
         self.session = None
         self._credentials = None
         
@@ -42,7 +43,7 @@ class SSOAuthenticator:
             self.session = boto3.Session(profile_name=self.profile_name)
             
             # Test credentials by making a simple STS call
-            sts_client = self.session.client('sts')
+            sts_client = self.session.client('sts', verify=self.verify_ssl)
             identity = sts_client.get_caller_identity()
             
             logger.info(f"Successfully authenticated as: {identity.get('Arn')}")
@@ -106,7 +107,7 @@ class SSOAuthenticator:
             AWS service client
         """
         session = self.get_session()
-        return session.client(service_name, region_name=region_name)
+        return session.client(service_name, region_name=region_name, verify=self.verify_ssl)
     
     def get_available_accounts(self) -> List[Dict[str, str]]:
         """
@@ -165,7 +166,7 @@ class SSOAuthenticator:
 class MultiAccountAuthenticator:
     """Handles authentication across multiple AWS accounts"""
     
-    def __init__(self, base_profile: str):
+    def __init__(self, base_profile: str, verify_ssl: bool = True):
         """
         Initialize multi-account authenticator
         
@@ -173,6 +174,7 @@ class MultiAccountAuthenticator:
             base_profile: Base SSO profile name
         """
         self.base_profile = base_profile
+        self.verify_ssl = verify_ssl
         self.authenticators = {}
     
     def get_authenticator(self, account_id: Optional[str] = None) -> SSOAuthenticator:
@@ -188,7 +190,7 @@ class MultiAccountAuthenticator:
         if account_id is None:
             # Use base profile
             if 'base' not in self.authenticators:
-                self.authenticators['base'] = SSOAuthenticator(self.base_profile)
+                self.authenticators['base'] = SSOAuthenticator(self.base_profile, verify_ssl=self.verify_ssl)
             return self.authenticators['base']
         
         # For cross-account access, you would typically use role assumption
@@ -196,7 +198,7 @@ class MultiAccountAuthenticator:
         if account_id not in self.authenticators:
             # Assume we have profiles named like: profile-accountid
             profile_name = f"{self.base_profile}-{account_id}"
-            self.authenticators[account_id] = SSOAuthenticator(profile_name)
+            self.authenticators[account_id] = SSOAuthenticator(profile_name, verify_ssl=self.verify_ssl)
         
         return self.authenticators[account_id]
     

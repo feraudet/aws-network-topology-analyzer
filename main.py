@@ -54,7 +54,7 @@ def discover(ctx, profile, regions, output_file, accounts, no_ssl_verify):
         combined_data = {}
         for prof in profiles:
             # Authenticate per profile
-            authenticator = SSOAuthenticator(prof)
+            authenticator = SSOAuthenticator(prof, verify_ssl=not no_ssl_verify)
             credentials = authenticator.get_credentials()
 
             orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
@@ -137,7 +137,7 @@ def full(ctx, profile, regions, output_dir, accounts, data_file, no_ssl_verify):
         combined_data = {}
         orchestrator = None
         for prof in profiles:
-            authenticator = SSOAuthenticator(prof)
+            authenticator = SSOAuthenticator(prof, verify_ssl=not no_ssl_verify)
             credentials = authenticator.get_credentials()
 
             orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
@@ -198,10 +198,11 @@ def _merge_discovery_datasets(base: dict, incoming: dict) -> dict:
 
 @cli.command()
 @click.option('--profile', required=True, help='AWS SSO profile name')
-def test_auth(profile):
+@click.option('--no-ssl-verify', is_flag=True, default=False, help='Disable SSL certificate verification for AWS SDK calls (insecure).')
+def test_auth(profile, no_ssl_verify):
     """Test AWS SSO authentication"""
     try:
-        authenticator = SSOAuthenticator(profile)
+        authenticator = SSOAuthenticator(profile, verify_ssl=not no_ssl_verify)
         credentials = authenticator.get_credentials()
         
         click.echo("✅ Authentication successful!")
