@@ -101,6 +101,10 @@ class NetworkAnalyzer:
         }
         
         try:
+            # Preserve discovery metadata (errors, regions, accounts) if present
+            if isinstance(self.network_data, dict) and 'metadata' in self.network_data:
+                self.analysis_results['discovery_metadata'] = self.network_data.get('metadata', {})
+
             # Step 1: Build resource inventory
             logger.info("Building resource inventory...")
             self._build_resource_inventory()

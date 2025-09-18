@@ -113,52 +113,126 @@ class DiscoveryOrchestrator:
         # Execute discovery in strict bottom-up order
         discovery_data = {}
         
+        # Phase 1: Application Resources Discovery
         try:
-            # Phase 1: Application Resources Discovery
             logger.info("Phase 1: Discovering Application Resources")
             discovery_data.update(self._discover_application_resources(regions, account_ids))
-            
-            # Phase 2: Security Groups
+        except Exception as e:
+            msg = f"Application resources discovery failed: {e}"
+            logger.error(msg)
+            self.discovery_metadata['errors'].append({
+                'phase': 'application_resources',
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': regions,
+                'error': str(e),
+            })
+            # Continue with empty placeholders
+            discovery_data.update({'ec2_instances': {r: [] for r in regions},
+                                   'lambda_functions': {r: [] for r in regions},
+                                   'rds_instances': {r: [] for r in regions},
+                                   'load_balancers': {r: [] for r in regions}})
+
+        # Phase 2: Security Groups
+        try:
             logger.info("Phase 2: Discovering Security Groups")
             discovery_data.update(self._discover_security_groups(regions, account_ids))
-            
-            # Phase 3: VPC Components (Subnets, NACLs, VPCs, Route Tables, etc.)
+        except Exception as e:
+            msg = f"Security groups discovery failed: {e}"
+            logger.error(msg)
+            self.discovery_metadata['errors'].append({
+                'phase': 'security_groups',
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': regions,
+                'error': str(e),
+            })
+            discovery_data.update({'security_groups': {r: [] for r in regions}})
+
+        # Phase 3: VPC Components (Subnets, NACLs, VPCs, Route Tables, etc.)
+        try:
             logger.info("Phase 3: Discovering VPC Components")
             discovery_data.update(self._discover_vpc_components(regions, account_ids))
-            
-            # Phase 4: Network Interfaces (ENIs)
+        except Exception as e:
+            msg = f"VPC components discovery failed: {e}"
+            logger.error(msg)
+            self.discovery_metadata['errors'].append({
+                'phase': 'vpc_components',
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': regions,
+                'error': str(e),
+            })
+            discovery_data.update({'vpc_components': {r: {'vpcs': [], 'subnets': [], 'route_tables': [], 'nat_gateways': [], 'igws': [], 'endpoints': [], 'nacls': []} for r in regions}})
+
+        # Phase 4: Network Interfaces (ENIs)
+        try:
             logger.info("Phase 4: Discovering Network Interfaces")
             discovery_data.update(self._discover_network_interfaces(regions, account_ids))
-            
-            # Phase 5: Transit Gateway Components
+        except Exception as e:
+            msg = f"ENI discovery failed: {e}"
+            logger.error(msg)
+            self.discovery_metadata['errors'].append({
+                'phase': 'network_interfaces',
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': regions,
+                'error': str(e),
+            })
+            discovery_data.update({'network_interfaces': {r: [] for r in regions}})
+
+        # Phase 5: Transit Gateway Components
+        try:
             logger.info("Phase 5: Discovering Transit Gateway Components")
             discovery_data.update(self._discover_transit_gateways(regions, account_ids))
-            
-            # Phase 6: VPC Endpoints
-            logger.info("Phase 6: Discovering VPC Endpoints")
-            # VPC Endpoints are already collected in VPC collector
-            
-            # Phase 7: Third-Party Services
+        except Exception as e:
+            msg = f"Transit Gateways discovery failed: {e}"
+            logger.error(msg)
+            self.discovery_metadata['errors'].append({
+                'phase': 'transit_gateways',
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': regions,
+                'error': str(e),
+            })
+            discovery_data.update({'transit_gateways': {r: [] for r in regions}})
+
+        # Phase 6: VPC Endpoints (already within VPC collector)
+        # No action needed here; errors captured in VPC components phase.
+
+        # Phase 7: Third-Party Services
+        try:
             logger.info("Phase 7: Discovering Third-Party Services")
             discovery_data.update(self._discover_third_party_services(regions, account_ids))
-            
-            # Phase 8: Network Firewall Rules
+        except Exception as e:
+            msg = f"Third-party services discovery failed: {e}"
+            logger.error(msg)
+            self.discovery_metadata['errors'].append({
+                'phase': 'third_party_services',
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': regions,
+                'error': str(e),
+            })
+            discovery_data.update({'third_party_services': {}})
+
+        # Phase 8: Network Firewall Rules
+        try:
             logger.info("Phase 8: Discovering Network Firewall Rules")
             discovery_data.update(self._discover_network_firewalls(regions, account_ids))
-            
-            # Calculate resource counts
-            self._calculate_resource_counts(discovery_data)
-            
-            # Add metadata
-            discovery_data['metadata'] = self._finalize_metadata()
-            
-            logger.info("AWS Network Discovery completed successfully")
-            return discovery_data
-            
         except Exception as e:
-            logger.error(f"Discovery process failed: {str(e)}")
-            self.discovery_metadata['errors'].append(str(e))
-            raise
+            msg = f"Network Firewall discovery failed: {e}"
+            logger.error(msg)
+            self.discovery_metadata['errors'].append({
+                'phase': 'network_firewalls',
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': regions,
+                'error': str(e),
+            })
+            discovery_data.update({'network_firewalls': {r: [] for r in regions}})
+
+        # Calculate resource counts
+        self._calculate_resource_counts(discovery_data)
+        
+        # Add metadata
+        discovery_data['metadata'] = self._finalize_metadata()
+        
+        logger.info("AWS Network Discovery completed with possible errors recorded")
+        return discovery_data
     
     def _initialize_collectors(self) -> None:
         """Initialize all resource collectors"""

@@ -96,6 +96,11 @@ class ReportGenerator:
         # Security Analysis CSV
         if analysis_results.get('security_analysis'):
             self._generate_security_analysis_csv(analysis_results['security_analysis'], output_dir)
+
+        # Errors CSV (from discovery metadata)
+        errors = (analysis_results.get('discovery_metadata') or {}).get('errors', [])
+        if errors:
+            self._generate_errors_csv(errors, output_dir)
     
     def _generate_communication_paths_csv(self, paths: List[Dict], output_dir: str) -> None:
         """Generate CSV for communication paths"""
@@ -232,6 +237,11 @@ class ReportGenerator:
             # Resource inventory sheets
             if analysis_results.get('resource_inventory'):
                 self._create_resource_inventory_sheets(analysis_results['resource_inventory'], writer)
+
+            # Errors sheet (if any)
+            errors = (analysis_results.get('discovery_metadata') or {}).get('errors', [])
+            if errors:
+                self._create_errors_sheet(errors, writer)
             
             # Security analysis sheets
             if analysis_results.get('security_analysis'):
@@ -245,6 +255,40 @@ class ReportGenerator:
         self._format_excel_workbook(excel_file)
         
         logger.info(f"Excel report saved to {excel_file}")
+
+    def _normalize_errors(self, errors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Normalize errors into a flat list of dicts for tabular output."""
+        norm = []
+        for err in errors:
+            regions = err.get('regions') or []
+            if isinstance(regions, list) and regions:
+                for r in regions:
+                    norm.append({
+                        'phase': err.get('phase'),
+                        'profile': err.get('profile'),
+                        'region': r,
+                        'error': err.get('error'),
+                    })
+            else:
+                norm.append({
+                    'phase': err.get('phase'),
+                    'profile': err.get('profile'),
+                    'region': None,
+                    'error': err.get('error'),
+                })
+        return norm
+
+    def _generate_errors_csv(self, errors: List[Dict[str, Any]], output_dir: str) -> None:
+        """Generate CSV file listing discovery errors."""
+        csv_file = Path(output_dir) / "errors.csv"
+        df = pd.DataFrame(self._normalize_errors(errors))
+        df.to_csv(csv_file, index=False, sep=self.config.output.csv_delimiter)
+        logger.info(f"Errors CSV saved to {csv_file}")
+
+    def _create_errors_sheet(self, errors: List[Dict[str, Any]], writer) -> None:
+        """Create an Errors sheet in the Excel workbook."""
+        df = pd.DataFrame(self._normalize_errors(errors))
+        df.to_excel(writer, sheet_name='Errors', index=False)
     
     def _create_summary_sheet(self, analysis_results: Dict[str, Any], writer) -> None:
         """Create summary sheet in Excel"""
