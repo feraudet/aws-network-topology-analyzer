@@ -1,0 +1,38 @@
+# AWS Network Discovery Configuration
+
+discovery:
+  batch_size: 100
+  max_retries: 3
+  retry_delay: 1.0
+  timeout: 300
+  parallel_workers: 10
+  include_terminated_instances: false
+  include_deleted_resources: false
+  mongodb_atlas_enabled: true
+  databricks_enabled: true
+
+analysis:
+  max_path_depth: 10
+  include_cross_account: true
+  include_cross_region: true
+  include_third_party: true
+  validate_security_groups: true
+  validate_nacls: true
+  validate_route_tables: true
+  validate_firewall_rules: true
+
+output:
+  json_indent: 2
+  csv_delimiter: ','
+  excel_max_rows: 1000000
+  html_template: 'default'
+  include_resource_inventory: true
+  include_communication_matrix: true
+  include_security_analysis: true
+  include_compliance_report: true
+
+auth:
+  sso_start_url: null
+  sso_region: 'us-east-1'
+  session_duration: 3600
+  cache_credentials: true
