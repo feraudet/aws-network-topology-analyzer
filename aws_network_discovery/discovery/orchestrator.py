@@ -233,6 +233,20 @@ class DiscoveryOrchestrator:
         
         logger.info("AWS Network Discovery completed with possible errors recorded")
         return discovery_data
+
+    def _record_collector_errors(self, collector, phase_name: str) -> None:
+        """Append structured per-region errors from a collector into metadata."""
+        try:
+            errs = getattr(collector, 'get_errors', lambda: [])()
+        except Exception:
+            errs = []
+        for err in errs:
+            self.discovery_metadata['errors'].append({
+                'phase': phase_name or err.get('phase'),
+                'profile': self.profile_name or self.credentials.get('Arn'),
+                'regions': [err.get('region')] if err.get('region') else [],
+                'error': err.get('error'),
+            })
     
     def _initialize_collectors(self) -> None:
         """Initialize all resource collectors"""
@@ -251,22 +265,30 @@ class DiscoveryOrchestrator:
         
         # EC2 Instances
         logger.info("Collecting EC2 instances...")
-        ec2_data = self.collectors['ec2'].collect(regions, account_ids)
+        ec2_col = self.collectors['ec2']
+        ec2_data = ec2_col.collect(regions, account_ids)
+        self._record_collector_errors(ec2_col, 'ec2_instances')
         app_resources['ec2_instances'] = ec2_data
         
         # Lambda Functions
         logger.info("Collecting Lambda functions...")
-        lambda_data = self.collectors['lambda'].collect(regions, account_ids)
+        lambda_col = self.collectors['lambda']
+        lambda_data = lambda_col.collect(regions, account_ids)
+        self._record_collector_errors(lambda_col, 'lambda_functions')
         app_resources['lambda_functions'] = lambda_data
         
         # RDS Instances
         logger.info("Collecting RDS instances...")
-        rds_data = self.collectors['rds'].collect(regions, account_ids)
+        rds_col = self.collectors['rds']
+        rds_data = rds_col.collect(regions, account_ids)
+        self._record_collector_errors(rds_col, 'rds_instances')
         app_resources['rds_instances'] = rds_data
         
         # Load Balancers (ALB/NLB)
         logger.info("Collecting Load Balancers...")
-        elb_data = self.collectors['elb'].collect(regions, account_ids)
+        elb_col = self.collectors['elb']
+        elb_data = elb_col.collect(regions, account_ids)
+        self._record_collector_errors(elb_col, 'load_balancers')
         app_resources['load_balancers'] = elb_data
         
         return app_resources
@@ -274,13 +296,17 @@ class DiscoveryOrchestrator:
     def _discover_security_groups(self, regions: List[str], account_ids: Optional[List[str]]) -> Dict[str, Any]:
         """Discover security groups and their rules"""
         logger.info("Collecting Security Groups...")
-        sg_data = self.collectors['security_groups'].collect(regions, account_ids)
+        sg_col = self.collectors['security_groups']
+        sg_data = sg_col.collect(regions, account_ids)
+        self._record_collector_errors(sg_col, 'security_groups')
         return {'security_groups': sg_data}
     
     def _discover_vpc_components(self, regions: List[str], account_ids: Optional[List[str]]) -> Dict[str, Any]:
         """Discover VPC components (VPCs, Subnets, Route Tables, NACLs, etc.)"""
         logger.info("Collecting VPC components...")
-        vpc_data = self.collectors['vpc'].collect(regions, account_ids)
+        vpc_col = self.collectors['vpc']
+        vpc_data = vpc_col.collect(regions, account_ids)
+        self._record_collector_errors(vpc_col, 'vpc_components')
         return {'vpc_components': vpc_data}
     
     def _discover_network_interfaces(self, regions: List[str], account_ids: Optional[List[str]]) -> Dict[str, Any]:

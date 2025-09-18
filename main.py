@@ -52,20 +52,48 @@ def discover(ctx, profile, regions, output_file, accounts, no_ssl_verify):
         profiles = list(profile) if isinstance(profile, (list, tuple)) else [profile]
 
         combined_data = {}
+        discovery_errors = []
+        orchestrator = None
         for prof in profiles:
-            # Authenticate per profile
-            authenticator = SSOAuthenticator(prof, verify_ssl=not no_ssl_verify)
-            credentials = authenticator.get_credentials()
+            try:
+                # Authenticate per profile
+                authenticator = SSOAuthenticator(prof, verify_ssl=not no_ssl_verify)
+                credentials = authenticator.get_credentials()
 
-            orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
-            profile_data = orchestrator.discover_all(region_list, account_list)
+                orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
+                profile_data = orchestrator.discover_all(region_list, account_list)
 
-            # Merge into combined dataset
-            combined_data = _merge_discovery_datasets(combined_data, profile_data)
+                # Merge into combined dataset
+                combined_data = _merge_discovery_datasets(combined_data, profile_data)
+            except Exception as e:
+                logging.error(f"Profile {prof} failed during discovery: {e}")
+                discovery_errors.append({
+                    'phase': 'authentication_or_discovery',
+                    'profile': prof,
+                    'regions': region_list,
+                    'error': str(e),
+                })
+                continue
 
         # Save merged data to file
-        # Use the last orchestrator for saving convenience (same formatting)
-        orchestrator.save_data(combined_data, output_file)
+        # Attach errors to metadata (create if necessary)
+        if discovery_errors:
+            meta = combined_data.get('metadata', {})
+            meta_errors = list(meta.get('errors', []))
+            meta_errors.extend(discovery_errors)
+            meta.update({'errors': meta_errors, 'regions': region_list})
+            combined_data['metadata'] = meta
+
+        # Use orchestrator if available; otherwise write minimal JSON
+        if orchestrator is not None:
+            orchestrator.save_data(combined_data, output_file)
+        else:
+            # Minimal save fallback
+            from pathlib import Path
+            import json
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_file, 'w') as f:
+                json.dump(combined_data or {'metadata': {'errors': discovery_errors, 'regions': region_list}}, f, indent=2)
 
         click.echo(f"✅ Discovery completed. Profiles: {', '.join(profiles)}. Data saved to {output_file}")
         
@@ -136,17 +164,43 @@ def full(ctx, profile, regions, output_dir, accounts, data_file, no_ssl_verify):
         click.echo("🔍 Starting discovery phase...")
         combined_data = {}
         orchestrator = None
+        discovery_errors = []
         for prof in profiles:
-            authenticator = SSOAuthenticator(prof, verify_ssl=not no_ssl_verify)
-            credentials = authenticator.get_credentials()
+            try:
+                authenticator = SSOAuthenticator(prof, verify_ssl=not no_ssl_verify)
+                credentials = authenticator.get_credentials()
 
-            orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
-            profile_data = orchestrator.discover_all(region_list, account_list)
-            combined_data = _merge_discovery_datasets(combined_data, profile_data)
+                orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
+                profile_data = orchestrator.discover_all(region_list, account_list)
+                combined_data = _merge_discovery_datasets(combined_data, profile_data)
+            except Exception as e:
+                logging.error(f"Profile {prof} failed during discovery: {e}")
+                discovery_errors.append({
+                    'phase': 'authentication_or_discovery',
+                    'profile': prof,
+                    'regions': region_list,
+                    'error': str(e),
+                })
+                continue
         
         # Ensure output directory exists
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        orchestrator.save_data(combined_data, str(data_file))
+        # Attach errors to metadata
+        if discovery_errors:
+            meta = combined_data.get('metadata', {})
+            meta_errors = list(meta.get('errors', []))
+            meta_errors.extend(discovery_errors)
+            meta.update({'errors': meta_errors, 'regions': region_list})
+            combined_data['metadata'] = meta
+
+        if orchestrator is not None:
+            orchestrator.save_data(combined_data, str(data_file))
+        else:
+            from pathlib import Path
+            import json
+            Path(data_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(data_file, 'w') as f:
+                json.dump(combined_data or {'metadata': {'errors': discovery_errors, 'regions': region_list}}, f, indent=2)
         
         click.echo(f"✅ Discovery completed for profiles: {', '.join(profiles)}. Data saved to {data_file}")
         

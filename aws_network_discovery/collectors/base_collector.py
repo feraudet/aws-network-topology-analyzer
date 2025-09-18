@@ -31,6 +31,7 @@ class BaseCollector(ABC):
         self.authenticator = authenticator
         self.config = config
         self.collected_data = {}
+        self.collected_errors = []  # list of {'phase': str, 'profile': str, 'region': str, 'error': str}
         
     @abstractmethod
     def collect(self, regions: List[str], account_ids: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -171,6 +172,17 @@ class BaseCollector(ABC):
                 except Exception as e:
                     logger.error(f"Failed to collect from region {region}: {e}")
                     results[region] = []
+                    # Record structured error for reporting
+                    try:
+                        profile = getattr(self.authenticator, 'profile_name', None)
+                    except Exception:
+                        profile = None
+                    self.collected_errors.append({
+                        'phase': self.get_resource_type(),
+                        'profile': profile,
+                        'region': region,
+                        'error': str(e),
+                    })
         
         return results
     
@@ -238,6 +250,10 @@ class BaseCollector(ABC):
             Dictionary containing all collected data
         """
         return self.collected_data
+
+    def get_errors(self) -> List[Dict[str, Any]]:
+        """Return structured errors captured during collection."""
+        return list(self.collected_errors)
     
     def clear_collected_data(self) -> None:
         """Clear collected data"""
