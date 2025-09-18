@@ -8,6 +8,8 @@ import logging
 from typing import Dict, List, Optional
 from botocore.exceptions import ClientError, NoCredentialsError, ProfileNotFound
 from botocore.session import Session
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,10 @@ class SSOAuthenticator:
         self.verify_ssl = verify_ssl
         self.session = None
         self._credentials = None
+        
+        # Optionally suppress SSL warnings when verification is disabled
+        if not self.verify_ssl:
+            urllib3.disable_warnings(InsecureRequestWarning)
         
     def get_credentials(self) -> Dict[str, str]:
         """
