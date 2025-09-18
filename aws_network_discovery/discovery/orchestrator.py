@@ -37,7 +37,7 @@ class DiscoveryOrchestrator:
     10. Network Firewall Rules
     """
     
-    def __init__(self, credentials: Dict[str, str], config: Config, profile_name: Optional[str] = None):
+    def __init__(self, credentials: Dict[str, str], config: Config, profile_name: Optional[str] = None, verify_ssl: bool = True):
         """
         Initialize discovery orchestrator
         
@@ -59,15 +59,17 @@ class DiscoveryOrchestrator:
             'resource_counts': {},
             'errors': [],
         }
+        self.verify_ssl = verify_ssl
         
     def _initialize_authenticator(self, profile_name: str = None) -> None:
         """Initialize authenticator with credentials"""
         # For now, we'll create a mock authenticator that uses the provided credentials
         # In a real implementation, you'd pass the profile name used to get these credentials
         class MockAuthenticator:
-            def __init__(self, credentials, profile_name=None):
+            def __init__(self, credentials, profile_name=None, verify_ssl: bool = True):
                 self.credentials = credentials
                 self.profile_name = profile_name
+                self.verify_ssl = verify_ssl
                 
             def get_client(self, service_name: str, region_name: str):
                 import boto3
@@ -76,11 +78,12 @@ class DiscoveryOrchestrator:
                     region_name=region_name,
                     aws_access_key_id=self.credentials['AccessKeyId'],
                     aws_secret_access_key=self.credentials['SecretAccessKey'],
-                    aws_session_token=self.credentials.get('SessionToken')
+                    aws_session_token=self.credentials.get('SessionToken'),
+                    verify=self.verify_ssl
                 )
         
         effective_profile = profile_name or self.profile_name
-        self.authenticator = MockAuthenticator(self.credentials, profile_name=effective_profile)
+        self.authenticator = MockAuthenticator(self.credentials, profile_name=effective_profile, verify_ssl=self.verify_ssl)
     
     def discover_all(self, regions: List[str], account_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 AWS Network Discovery and Analysis Script
 Main entry point for the application.
@@ -39,8 +39,9 @@ def cli(ctx, config, log_level, log_file):
 @click.option('--regions', default='us-east-1,eu-west-1,eu-central-1', help='Comma-separated list of regions')
 @click.option('--output-file', '-o', default='network_data.json', help='Output JSON file path')
 @click.option('--accounts', help='Comma-separated list of account IDs (optional)')
+@click.option('--no-ssl-verify', is_flag=True, default=False, help='Disable SSL certificate verification for AWS SDK calls (insecure).')
 @click.pass_context
-def discover(ctx, profile, regions, output_file, accounts):
+def discover(ctx, profile, regions, output_file, accounts, no_ssl_verify):
     """Discover AWS network resources and save to JSON file"""
     config = ctx.obj['config']
     
@@ -56,7 +57,7 @@ def discover(ctx, profile, regions, output_file, accounts):
             authenticator = SSOAuthenticator(prof)
             credentials = authenticator.get_credentials()
 
-            orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof)
+            orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
             profile_data = orchestrator.discover_all(region_list, account_list)
 
             # Merge into combined dataset
@@ -116,8 +117,9 @@ def analyze(ctx, input_file, output_dir):
 @click.option('--output-dir', '-o', default='./reports', help='Output directory for reports')
 @click.option('--accounts', help='Comma-separated list of account IDs (optional)')
 @click.option('--data-file', help='Intermediate data file name (default: network_data.json)')
+@click.option('--no-ssl-verify', is_flag=True, default=False, help='Disable SSL certificate verification for AWS SDK calls (insecure).')
 @click.pass_context
-def full(ctx, profile, regions, output_dir, accounts, data_file):
+def full(ctx, profile, regions, output_dir, accounts, data_file, no_ssl_verify):
     """Run full discovery and analysis pipeline"""
     config = ctx.obj['config']
     
@@ -138,7 +140,7 @@ def full(ctx, profile, regions, output_dir, accounts, data_file):
             authenticator = SSOAuthenticator(prof)
             credentials = authenticator.get_credentials()
 
-            orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof)
+            orchestrator = DiscoveryOrchestrator(credentials, config, profile_name=prof, verify_ssl=not no_ssl_verify)
             profile_data = orchestrator.discover_all(region_list, account_list)
             combined_data = _merge_discovery_datasets(combined_data, profile_data)
         
